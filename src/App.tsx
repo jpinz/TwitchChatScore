@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import tmi from "tmi.js";
 import CountUp from "react-countup";
-import { prisma } from "./db";
 
 import "./App.css";
 
@@ -34,32 +33,33 @@ function App() {
       return 0;
     }
 
+    let messageQueue: string[] = [];
+
     client.on("message", (_channel, tags, message, _self) => {
       console.log(`${tags["display-name"]}: ${message}`);
-      const change = messageCounter(message);
-      if (change === 0) {
-        return;
-      }
-      prisma.chat.create({
-        data: {
-          username: tags["display-name"] || "unknown",
-          message: message,
-          value: change,
-        },
-      });
+      messageQueue.push(message);
     });
+
+    setInterval(() => {
+      if (messageQueue.length > 0) {
+      let totalChange = 0;
+      for (const msg of messageQueue) {
+        totalChange += messageCounter(msg);
+      }
+      messageQueue = [];
+      }
+    }, 2000);
 
     // Cleanup function to disconnect the client when the component unmounts
     return () => {
       client.disconnect();
-      prisma.$disconnect().catch((e) => console.error(e));
     };
   }, []); // Empty dependency array ensures this runs only once
 
 
   return (
     <>
-      <CountUp start={prevCount} end={count} duration={1} className="text-outline" />
+      <CountUp start={prevCount} end={count} duration={2} className="text-outline" />
     </>
   );
 }
