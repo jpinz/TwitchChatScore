@@ -15,6 +15,23 @@ function App() {
       import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY
     );
 
+    async function fetchTotalValue() {
+      const { data, error } = await supabase
+        .from("chat")
+        .select("value", { count: "exact" })
+        .select("value");
+
+      if (error) {
+        console.error("Error fetching total value:", error);
+      } else if (data) {
+        const total = data.reduce((acc, curr) => acc + (curr.value || 0), 0);
+        setCount(total);
+        setPrevCount(total);
+      }
+    }
+
+    fetchTotalValue();
+
     const client = new tmi.Client({
       channels: ["paymoneywubby"],
     });
