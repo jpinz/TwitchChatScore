@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import tmi from "tmi.js";
 import CountUp from "react-countup";
 import { createClient } from "@supabase/supabase-js";
@@ -6,85 +6,53 @@ import type { Database } from "../database.types";
 
 import "./App.css";
 
+import { socket } from "./socket";
+
+
 function App() {
   const [count, setCount] = useState(0);
-  const [prevCount, setPrevCount] = useState(count);
+  const prevCountRef = useRef<number>(0);
+
   useEffect(() => {
-    const supabase = createClient<Database>(
-      import.meta.env.VITE_PUBLIC_SUPABASE_URL,
-      import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY
-    );
-
-    async function fetchTotalValue() {
-      const { data, error } = await supabase
-        .from("chat")
-        .select("value", { count: "exact" })
-        .select("value");
-
-      if (error) {
-        console.error("Error fetching total value:", error);
-      } else if (data) {
-        const total = data.reduce((acc, curr) => acc + (curr.value || 0), 0);
-        setCount(total);
-        setPrevCount(total);
+    const fetchInitialCount = async () => {
+      try {
+        const response = await fetch("http://localhost:3000/api/count/total");
+        const data = await response.json();
+        setCount(data);
+        prevCountRef.current = data;
+      } catch (error) {
+        console.error("Error fetching initial count:", error);
       }
-    }
+    };
 
-    fetchTotalValue();
-
-    const client = new tmi.Client({
-      channels: ["paymoneywubby"],
-    });
-
-    client.connect();
-
-    function messageCounter(message: string): number {
-      if (message.trim().startsWith("+2")) {
-        setCount((pc) => {
-          setPrevCount(pc);
-          return pc + 2;
-        });
-        return 2;
-      }
-      if (message.trim().startsWith("-2")) {
-        setCount((pc) => {
-          setPrevCount(pc);
-          return pc - 2;
-        });
-        return -2;
-      }
-      return 0;
-    }
-
-    const messageQueue: Map<string, [string, string]> = new Map();
-    client.on("message", (_channel, tags, message, _self) => {
-      console.log(`${tags["display-name"]}: ${message}`);
-      messageQueue.set(new Date().toUTCString(), [tags["display-name"] || "", message]);
-    });
-
-    setInterval(async () => {
-      if (messageQueue.size > 0) {
-        for (const msg of messageQueue) {
-          const change = messageCounter(msg[1][1]);
-          if (change === 0) {
-            continue;
-          }
-          await supabase.from("chat").insert({
-            created_at: msg[0],
-            username: msg[1][0],
-            message: msg[1][1],
-            value: change,
-          });
-        }
-        messageQueue.clear();
-      }
-    }, 2000);
+    fetchInitialCount();
   }, []);
+  useEffect(() => {
+    // Listen for change
+    socket.on("change", (change) => {
+      console.log("change", change);
+      setCount((count) => count + change);
+    });
+
+    return () => {
+      socket.off("change");
+    };
+  }, []);
+
+  useEffect(() => {
+    /**
+     * assign the latest render value of count to the ref
+     * However, assigning a value to ref doesn't re-render the app
+     * So, prevCountRef.current in the return statement displays the
+     * last value in the ref at the time of render i.e., the previous state value.
+     */
+    prevCountRef.current = count;
+  }, [count]); //run this code when the value of count changes
 
   return (
     <>
       <CountUp
-        start={prevCount}
+        start={prevCountRef.current}
         end={count}
         duration={2}
         className="text-outline"

@@ -1,0 +1,9 @@
+GET http://localhost:3000/api/count/total
+
+###
+
+POST http://localhost:3000/api/count/add
+
+###
+
+POST http://localhost:3000/api/count/subtract
